@@ -1,12 +1,8 @@
 # Contents of ~/my_app/pages/page_3.py
-import streamlit as st
-import pandas as pd
 import numpy as np
-import plotly.express as px
-from plotly.subplots import make_subplots
+import pandas as pd
 import plotly.graph_objects as go
-from st_aggrid import AgGrid
-from st_aggrid.grid_options_builder import GridOptionsBuilder
+import streamlit as st
 
 from pages.page_2 import aggrid_df
 

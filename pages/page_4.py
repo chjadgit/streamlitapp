@@ -1,14 +1,10 @@
 # Contents of ~/my_app/pages/page_4.py
-import streamlit as st
-import pandas as pd
 import numpy as np
-import plotly.express as px
-from plotly.subplots import make_subplots
+import pandas as pd
 import plotly.graph_objects as go
-from st_aggrid import AgGrid
-from st_aggrid.grid_options_builder import GridOptionsBuilder
-from main_page import get_data_from_excel
+import streamlit as st
 
+from main_page import get_data_from_excel
 from pages.page_2 import aggrid_df
 
 st.markdown("# Page 3:M1_M3分析 🎉")

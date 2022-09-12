@@ -63,8 +63,50 @@ def select_cpdf(data, prodt_select, start_time, end_time, group=None):
     return result_data
 
 
+def plt_ye_bl(df, x_lab, title=None):
+    # 不良、余额图
+    plt_data = df.copy()
+    loan_sum = plt_data['LOAN_AMOUNT_W'].sum()
+    nonperf_sum = plt_data['nonperf_delq_prin_balance_sum_w'].sum()
+    nonperf_ratio = nonperf_sum / loan_sum
+    index_m = max(plt_data.index) + 1
+    plt_data.loc[index_m, 'sub_brh_name'] = '北京分行'
+    plt_data.loc[index_m, 'LOAN_AMOUNT_W'] = loan_sum
+    plt_data.loc[index_m, 'nonperf_delq_prin_balance_sum_w'] = nonperf_sum
+    plt_data.loc[index_m, 'NONPERF_GEN_RATIO'] = nonperf_ratio
+
+    fig1 = go.Bar(x=plt_data[x_lab],
+                  y=plt_data['LOAN_AMOUNT_W'],
+                  text=plt_data['LOAN_AMOUNT_W'].round(),
+                  textposition='outside',
+                  name='贷款余额')
+
+    fig2 = go.Scatter(x=plt_data[x_lab],
+                      y=plt_data['NONPERF_GEN_RATIO'],
+                      mode="markers+lines+text",
+                      text=plt_data['NONPERF_GEN_RATIO'].apply(lambda x: format(x, '.2%')),
+                      yaxis="y2",
+                      name='不良率')
+    datas = [fig1, fig2]
+    layout = go.Layout(title=title,
+                       xaxis=dict(tickangle=-45, ),
+                       yaxis=dict(title="贷款余额"),
+                       yaxis2=dict(title="不良率", overlaying="y", side="right", tickformat='2%'),
+                       )
+
+    fig = go.Figure(data=datas, layout=layout)
+    fig.update_layout(legend=dict(
+        orientation="h",  # 控制水平显示
+        yanchor="bottom",  # 分别设置xy轴的位置和距离大小
+        y=1.02,
+        xanchor="right",
+        x=1
+    ))
+    st.plotly_chart(fig)
+
+
 def select_bhdf(data, start_time, end_time, index_select):
-    # 各支行不良分析
+    # 本行分析：各支行不良分析
     df_selection = data.query("DATEBEG_M >= @start_time & DATEBEG_M <= @end_time")
     result_data = pd.pivot_table(df_selection,
                                  index=index_select,
@@ -78,38 +120,15 @@ def select_bhdf(data, start_time, end_time, index_select):
     aggrid_df(bf_sysdata)
     if len(index_select) == 1:
         # 余额、不良
-        fig1 = go.Bar(x=bf_sysdata[index_select[0]],
-                      y=bf_sysdata['LOAN_AMOUNT_W'],
-                      name='贷款余额')
-
-        fig2 = go.Scatter(x=bf_sysdata[index_select[0]],
-                          y=bf_sysdata['NONPERF_GEN_RATIO'],
-                          mode="lines",
-                          yaxis="y2",
-                          name='不良率')
-        datas = [fig1, fig2]
-        layout = go.Layout(title=index_select[0],
-                           xaxis=dict(title=index_select[0]),
-                           yaxis=dict(title="贷款余额"),
-                           yaxis2=dict(title="不良率", overlaying="y", side="right"),
-                           )
-        fig = go.Figure(data=datas, layout=layout)
-        st.plotly_chart(fig)
+        title = '{}新发放贷款不良生产率'.format(index_select[0])
+        plt_ye_bl(df=bf_sysdata, x_lab=index_select[0], title=title)
     if len(index_select) == 2:
-        x_lab = index_select[0]
         color_lab = index_select[1]
-        fig = px.bar(
-            bf_sysdata,  # 数据集
-            x=x_lab,  # 横轴
-            y="NONPERF_GEN_RATIO",  # 纵轴
-            # color=color_lab,  # 颜色参数取值
-            barmode='group',
-            facet_row=color_lab,  # 行素取值
-            category_orders={
-                color_lab: bf_sysdata[color_lab].unique(),  # 分类顺序 每个产品一个图
-            }
-        )
-        st.plotly_chart(fig)
+
+        for pg in bf_sysdata[color_lab].unique():
+            title = '各支行{}新发放贷款不良生产率'.format(pg)
+            plt_ye_bl(df=bf_sysdata[bf_sysdata[color_lab] == pg], x_lab=index_select[0],
+                      title=title)
 
     ## 下钻分析 ['sub_brh_name', 'prodt_l5_up', 'prodt_l5', 'prodt_l6_up'],
     sub_brh_name = st.selectbox("下钻支行分析",
@@ -119,28 +138,38 @@ def select_bhdf(data, start_time, end_time, index_select):
     df2_selection = df_selection.query("sub_brh_name == @sub_brh_name")
 
     result_data2 = pd.pivot_table(df2_selection,
-                                 index=cp_type,
-                                 values=['nonperf_delq_prin_balance_sum_w', 'LOAN_AMOUNT_W'],
-                                 aggfunc=[np.sum])
+                                  index=cp_type,
+                                  values=['nonperf_delq_prin_balance_sum_w', 'LOAN_AMOUNT_W'],
+                                  aggfunc=[np.sum])
     result_data2.columns = result_data2.columns.droplevel(0)
     result_data2['NONPERF_GEN_RATIO'] = result_data2['nonperf_delq_prin_balance_sum_w'] / \
-                                       result_data2['LOAN_AMOUNT_W']
+                                        result_data2['LOAN_AMOUNT_W']
     bf_sysdata_2 = result_data2.reset_index()
 
     datas_2 = [go.Bar(x=bf_sysdata_2[cp_type],
                       y=bf_sysdata_2['LOAN_AMOUNT_W'],
+                      text=bf_sysdata_2['LOAN_AMOUNT_W'].round(),
+                      textposition='outside',
                       name='贷款余额'),
                go.Scatter(x=bf_sysdata_2[cp_type],
                           y=bf_sysdata_2['NONPERF_GEN_RATIO'],
-                          mode="lines",
+                          mode="markers+lines+text",
                           yaxis="y2",
+                          text=bf_sysdata_2['NONPERF_GEN_RATIO'].apply(lambda x: format(x, '.2%')),
                           name='不良率')]
     layout2 = go.Layout(title="{} {} 维度不良率图".format(sub_brh_name, cp_type),
-                        xaxis=dict(title=cp_type),
+                        xaxis=dict(title=cp_type, tickangle=-45),
                         yaxis=dict(title="贷款余额"),
-                        yaxis2=dict(title="不良率", overlaying="y", side="right"),
+                        yaxis2=dict(title="不良率", overlaying="y", side="right", tickformat='2%'),
                         )
     fig2 = go.Figure(data=datas_2, layout=layout2)
+    fig2.update_layout(legend=dict(
+        orientation="h",  # 控制水平显示
+        yanchor="bottom",  # 分别设置xy轴的位置和距离大小
+        y=1.02,
+        xanchor="right",
+        x=1
+    ))
     st.plotly_chart(fig2)
 
 
@@ -161,12 +190,12 @@ if multipage == '时间维度':
     st.markdown('#### 分析报告日期区间 {} 至 {}'.format(start_time, end_time))
 
     prodt_l5_up = st.sidebar.multiselect(
-        "产品类型1:",
+        "产品类型prodt_l5_up:",
         options=df2["prodt_l5_up"].unique(),
         default=df2["prodt_l5_up"].unique()
     )
     prodt_l5 = st.sidebar.multiselect(
-        "产品类型2:",
+        "产品类型prodt_l5:",
         options=df2["prodt_l5"].unique(),
         default=df2["prodt_l5"].unique()
     )
@@ -185,19 +214,28 @@ if multipage == '时间维度':
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=bh_select.index,
                              y=bh_select['NONPERF_GEN_RATIO'],
-                             mode='lines+markers',
+                             mode="markers+lines+text",
+                             text=bh_select['NONPERF_GEN_RATIO'].apply(lambda x: format(x, '.2%')),
+                             textposition="top center",
+                             line=dict(color="Crimson"),
                              name='本行'))
     fig.add_trace(go.Scatter(x=bz_select.index,
                              y=bz_select['NONPERF_GEN_RATIO'],
                              mode='lines+markers',
+                             line=dict(color="MediumPurple"),
                              name='本组'))
     fig.add_trace(go.Scatter(x=qh_select.index,
                              y=qh_select['NONPERF_GEN_RATIO'],
                              mode='lines+markers',
+                             line=dict(color="Blue"),
                              name='全行'))
     fig.update_layout(width=800,
                       height=500,  # 改变整个figure的大小
-                      title_text="{} 至 {} 区间不良率趋势".format(start_time, end_time)
+                      title_text="{} 至 {} 区间不良率趋势".format(start_time, end_time),
+                      yaxis=dict(tickformat='2%'),
+                      xaxis=dict(
+                          tickangle=-45,
+                          type='category')
                       )
     st.plotly_chart(fig)
     # temp = issue_yearmonth_to_grade_level.stack().reset_index()
@@ -262,8 +300,8 @@ if multipage == '本行分析':
     # )
     index_select = st.sidebar.multiselect(
         "维度选择:",
-        options=['sub_brh_name', 'prodt_l5_up', 'prodt_l5', 'prodt_l6_up', 'REPORT_DT'],
-        default=['sub_brh_name', 'prodt_l6_up', 'REPORT_DT'],
+        options=['sub_brh_name', 'prodt_l5_up', 'prodt_l5', 'prodt_l6_up', 'prodt_no_desc'],
+        default=['sub_brh_name', 'prodt_l6_up'],
     )
     st.markdown('#### 放款区间 {} 至 {} 各支行不良率分析'.format(start_time, end_time))
     bf_sysdata = select_bhdf(df1, start_time, end_time, index_select)
